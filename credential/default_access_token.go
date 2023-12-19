@@ -13,6 +13,8 @@ import (
 const (
 	// AccessTokenURL 获取access_token的接口
 	accessTokenURL = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s"
+	// StableAccessTokenURL 获取稳定版接口调用凭据接口
+	stableAccessTokenURL = "https://api.weixin.qq.com/cgi-bin/stable_token?grant_type=client_credential&appid=%s&secret=%s"
 	// AccessTokenURL 企业微信获取access_token的接口
 	workAccessTokenURL = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=%s&corpsecret=%s"
 	// CacheKeyOfficialAccountPrefix 微信公众号cache key前缀
@@ -25,24 +27,26 @@ const (
 
 // DefaultAccessToken 默认AccessToken 获取
 type DefaultAccessToken struct {
-	appID           string
-	appSecret       string
-	cacheKeyPrefix  string
-	cache           cache.Cache
-	accessTokenLock *sync.Mutex
+	appID                string
+	appSecret            string
+	cacheKeyPrefix       string
+	useStableAccessToken bool // 是否使用稳定的access_token
+	cache                cache.Cache
+	accessTokenLock      *sync.Mutex
 }
 
 // NewDefaultAccessToken new DefaultAccessToken
-func NewDefaultAccessToken(appID, appSecret, cacheKeyPrefix string, cache cache.Cache) AccessTokenHandle {
+func NewDefaultAccessToken(appID, appSecret, cacheKeyPrefix string, cache cache.Cache, useStableAccessToken bool) AccessTokenHandle {
 	if cache == nil {
 		panic("cache is ineed")
 	}
 	return &DefaultAccessToken{
-		appID:           appID,
-		appSecret:       appSecret,
-		cache:           cache,
-		cacheKeyPrefix:  cacheKeyPrefix,
-		accessTokenLock: new(sync.Mutex),
+		appID:                appID,
+		appSecret:            appSecret,
+		cache:                cache,
+		cacheKeyPrefix:       cacheKeyPrefix,
+		useStableAccessToken: useStableAccessToken,
+		accessTokenLock:      new(sync.Mutex),
 	}
 }
 
@@ -73,7 +77,12 @@ func (ak *DefaultAccessToken) GetAccessToken() (accessToken string, err error) {
 
 	// cache失效，从微信服务器获取
 	var resAccessToken ResAccessToken
-	resAccessToken, err = GetTokenFromServer(fmt.Sprintf(accessTokenURL, ak.appID, ak.appSecret))
+	if ak.useStableAccessToken {
+		resAccessToken, err = GetTokenFromServer(fmt.Sprintf(stableAccessTokenURL, ak.appID, ak.appSecret))
+	} else {
+		resAccessToken, err = GetTokenFromServer(fmt.Sprintf(accessTokenURL, ak.appID, ak.appSecret))
+	}
+
 	if err != nil {
 		return
 	}
